@@ -1,118 +1,71 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 
-import { getMe } from "@/lib/api";
-import { pending, sessionToken } from "@/lib/session";
-import { confirmPhoneAction, resendCodeAction } from "./actions";
+import { IconShieldCheck } from "@/components/icons";
+import { CodeInput, Field } from "@/components/ui/Field";
+import { FlowSteps } from "@/components/ui/FlowSteps";
+import { Notice } from "@/components/ui/Notice";
+import { Page, PageHead } from "@/components/ui/Page";
+import { SubmitButton } from "@/components/ui/SubmitButton";
+import { pending } from "@/lib/session";
+import { confirmEmailAction, resendCodeAction } from "./actions";
 
-export const metadata: Metadata = { title: "Confirm your phone" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("confirm"))("eyebrow") };
+}
 export const dynamic = "force-dynamic";
 
 type Search = Record<string, string | string[] | undefined>;
-const one = (v: string | string[] | undefined): string =>
-  Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
+const one = (v: string | string[] | undefined): string => (Array.isArray(v) ? (v[0] ?? "") : (v ?? ""));
 
 /**
- * Confirm your phone (AUT-02).
- *
- * **The ID already exists by this point.** Registration mints it; only the
- * confirmed flag waits here. So a provider outage delays a confirmation, never
- * a registration — which is what you want in a hall with 200 people in it, and
- * why there is a plain link to the card on this page.
- *
- * One input, not six boxes: a six-box widget needs JavaScript, and this screen
- * has to work without it.
+ * Confirm your email (AUT-02). Reached straight after registering, or after
+ * signing in to an account whose email was never confirmed. The KUID already
+ * exists by now, so this screen reassures before it asks. One input, not six
+ * boxes: six boxes need JavaScript.
  */
-export default async function ConfirmPhonePage({
-  searchParams,
-}: {
-  searchParams: Promise<Search>;
-}) {
+export default async function ConfirmEmailPage({ searchParams }: { searchParams: Promise<Search> }) {
+  const t = await getTranslations("confirm");
   const params = await searchParams;
   const error = one(params.error);
   const sent = one(params.sent);
-  const wait = one(params.wait);
 
-  // Either they have just registered (the pending cookie) or they are signed in
-  // with a number that was never confirmed.
   const waiting = await pending();
-  const token = await sessionToken();
-  const me = token ? await getMe(token).catch(() => null) : null;
-  if (!waiting && !me) redirect("/sign-in");
-  if (!waiting && me?.phone_verified) redirect("/me");
-
-  const phone = waiting?.phone ?? "";
-  const shown = me?.phone ?? phone;
-  const kuid = waiting?.kuid || me?.kuid || "";
+  if (!waiting) redirect("/sign-in");
 
   return (
-    <div className="stack">
-      <p className="eyebrow">Step 2 of 3</p>
-      <h1>Enter the code we sent</h1>
-      <p className="lede">
-        Sent by text message to {shown}.
-      </p>
+    <Page>
+      <FlowSteps current={1} />
+      <PageHead eyebrow={t("eyebrow")} title={t("title")} lede={t("sentTo", { email: waiting.email || t("yourEmail") })} />
 
-      {error ? (
-        <div className="notice notice--bad" role="alert" tabIndex={-1}>
-          <p className="notice__title">That did not work</p>
-          <p style={{ marginBottom: 0 }}>{error}</p>
+      <div className="mb-6 flex gap-3 rounded-card bg-pitch p-4 text-on-pitch">
+        <IconShieldCheck className="shrink-0" aria-hidden="true" />
+        <div>
+          <p className="font-bold">{t("safe")}</p>
+          <p>{t("safeText")}</p>
         </div>
-      ) : sent ? (
-        <div className="notice" role="status">
-          <p className="notice__title">Another code is on its way</p>
-          <p style={{ marginBottom: 0 }}>
-            If it does not arrive, you can ask again in about {wait || 60} seconds.
-          </p>
-        </div>
-      ) : null}
-
-      <form action={confirmPhoneAction} className="doc" noValidate>
-        <div className="doc__body">
-          <input type="hidden" name="phone" value={phone} />
-          <div className="field">
-            <label htmlFor="code">6-digit code</label>
-            <span className="hint" id="code-hint">
-              It expires in 10 minutes. We will never ask you for it.
-            </span>
-            <input
-              id="code"
-              name="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              required
-              maxLength={6}
-              placeholder="000000"
-              aria-describedby="code-hint"
-              style={{ fontFamily: "var(--font-mono)", letterSpacing: ".3em" }}
-            />
-          </div>
-          <button type="submit" className="btn btn--primary btn--block">
-            Confirm my number
-          </button>
-        </div>
-      </form>
-
-      <form action={resendCodeAction}>
-        <input type="hidden" name="phone" value={phone} />
-        <button type="submit" className="btn btn--ghost">Send another code</button>
-      </form>
-
-      <div className="notice">
-        <p className="notice__title">Your ID is already yours</p>
-        <p style={{ marginBottom: kuid ? "var(--s3)" : 0 }}>
-          Confirming your number is how we know the phone is yours, and it is
-          needed before you can be verified. It does not affect your KAFRIADA ID,
-          which was issued the moment you registered.
-        </p>
-        {kuid ? (
-          <a href={`/card/${encodeURIComponent(kuid)}`}>See my card now</a>
-        ) : null}
       </div>
 
-      <p className="hint" style={{ color: "var(--muted)" }}>
-        Wrong number? <a href="/register">Start again with the right one</a>.
-      </p>
-    </div>
+      {error ? (
+        <Notice signal="red" title={t("error")} className="mb-6"><p>{error}</p></Notice>
+      ) : sent ? (
+        <Notice signal="whistle" title={t("sent")} className="mb-6"><p>{t("sentText")}</p></Notice>
+      ) : null}
+
+      <form action={confirmEmailAction} noValidate className="space-y-5">
+        <Field name="code" label={t("label")} hint={t("hint")}>
+          {(a) => <CodeInput {...a} required placeholder="000000" />}
+        </Field>
+        <SubmitButton pendingLabel={t("pending")}>{t("submit")}</SubmitButton>
+      </form>
+
+      {/* The server enforces the wait between codes and says so. */}
+      <form action={resendCodeAction} className="mt-4">
+        <SubmitButton variant="secondary" size="md" pendingLabel={t("resendPending")}>{t("resend")}</SubmitButton>
+      </form>
+
+      <p className="mt-8 text-xs text-muted">{t("why")}</p>
+    </Page>
   );
 }

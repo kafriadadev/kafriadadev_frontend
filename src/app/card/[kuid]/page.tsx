@@ -1,29 +1,30 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
+import { IconArrowRight, IconDownload, IconPrinter, IconShieldCheck } from "@/components/icons";
+import { Button } from "@/components/ui/Button";
+import { Page, PageHead } from "@/components/ui/Page";
+import { PlayerCard, PrintCard } from "@/components/ui/PlayerCard";
+import { KuidStrip } from "@/components/ui/Scoreboard";
 import { getProfile, type PublicProfile } from "@/lib/api";
+import { Tilt } from "@/components/ui/Tilt";
 
-export const metadata: Metadata = { title: "Your KAFRIADA card" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("cardPage"))("title"), robots: { index: false } };
+}
 export const dynamic = "force-dynamic";
 
 /**
- * The card (AUT-03 + ATH-03) — the moment the product is delivered.
- *
- * Two things govern this page. **The free thing arrives first**: the ID is
- * handed over, printable, before anything is asked for. Putting the ₦2,500
- * request above it would depress registration, and registration volume is the
- * first gate the pilot is judged on.
- *
- * And the card is **designed to be printed and cut out**. In the pilot the
- * printed card is what people actually carry, so the print stylesheet is not an
- * afterthought — it is the delivery format.
+ * The card (AUT-03 print, ATH-03). The page is the print layout: the browser's
+ * own Print command produces the card at ID-1 size, which works where scripts
+ * do not. PNG and PDF are plain downloads for browsers without "print to PDF".
+ * The free thing comes first; the optional verification only after it.
  */
-export default async function CardPage({
-  params,
-}: {
-  params: Promise<{ kuid: string }>;
-}) {
+export default async function CardPage({ params }: { params: Promise<{ kuid: string }> }) {
   const { kuid } = await params;
+  const t = await getTranslations("cardPage");
+  const tu = await getTranslations();
 
   let profile: PublicProfile;
   try {
@@ -31,127 +32,72 @@ export default async function CardPage({
   } catch {
     notFound();
   }
-
-  const firstName = profile.full_name.split(" ")[0];
+  const k = encodeURIComponent(profile.kuid);
+  const card = {
+    kuid: profile.kuid,
+    fullName: profile.full_name,
+    position: profile.playing_position,
+    lgaName: profile.lga_name,
+    stateName: profile.state_name,
+    year: profile.registered_year,
+    verified: profile.is_verified,
+    photoSrc: profile.is_verified && profile.photo_url ? `/photo/${k}` : null,
+  };
+  const labels = { idLabel: tu("ui.idLabel"), verified: tu("ui.verified"), photoAlt: tu("ui.photoAlt", { name: profile.full_name }), noPhoto: tu("ui.noPhoto") };
 
   return (
-    <div className="stack">
-      <div className="no-print">
-        <p className="eyebrow">Step 3 of 3 · Done</p>
-        <h1>{`${firstName}, this is your ID.`}</h1>
-        <p className="lede">
-          It is permanent and it is yours. Print it, download it, or simply
-          write the number down — all three work.
-        </p>
+    <Page>
+      <div className="print:hidden">
+        <PageHead eyebrow={t("eyebrow")} title={t("heading", { name: profile.full_name.split(" ")[0] })} lede={t("lede")} />
       </div>
 
-      {/* -- The card itself. This is what gets printed. ------------------- */}
-      <article className="doc" aria-label="Your KAFRIADA card">
-        <div className="doc__body">
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--s4)", alignItems: "flex-start" }}>
-            <div style={{ minWidth: 0 }}>
-              <p className="eyebrow" style={{ marginBottom: "var(--s2)" }}>
-                Federation of Nigerian Sports
-              </p>
-              <h2 style={{ fontSize: "clamp(1.4rem, 5.5vw, 1.9rem)", marginBottom: "var(--s1)" }}>
-                {profile.full_name}
-              </h2>
-              <p style={{ color: "var(--plate-muted)", margin: 0, fontSize: ".95rem" }}>
-                {profile.sport}
-                {profile.playing_position ? ` · ${profile.playing_position}` : ""}
-              </p>
-              <p style={{ color: "var(--plate-muted)", margin: "2px 0 0", fontSize: ".95rem" }}>
-                {profile.lga_name}, {profile.state_name}
-              </p>
-            </div>
+      {/* On screen: the player card and its code. On paper: the ID-1 card. */}
+      <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-center print:hidden">
+        <div className="w-full max-w-xs">
+          <Tilt><PlayerCard size="lg" data={card} labels={labels} /></Tilt>
+        </div>
+        <figure className="flex flex-col items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/qr/${k}`} alt={tu("card.scanHelp")} width={176} height={176} className="rounded-card bg-plate-bg p-2" />
+          <figcaption className="font-display text-lg font-extrabold uppercase italic">{tu("card.scan")}</figcaption>
+        </figure>
+      </div>
+      <div className="hidden print:block">
+        <PrintCard
+          data={card}
+          labels={labels}
+          qrSrc={`/qr/${k}`}
+          back={{ scan: tu("card.scan"), scanHelp: tu("card.scanHelp"), issuedBy: tu("card.issuedBy") }}
+        />
+      </div>
 
-            <div className="seal" aria-hidden="true">
-              <strong>KAF</strong>
-              {profile.registered_year}
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex", gap: "var(--s4)", alignItems: "center",
-              marginTop: "var(--s5)", paddingTop: "var(--s5)",
-              borderTop: "1px solid var(--plate-rule)", flexWrap: "wrap",
-            }}
-          >
-            {/* Server-rendered, cached a day, and proxied — the browser never
-                touches the domain tier to get it. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`/qr/${encodeURIComponent(profile.kuid)}`}
-              alt={`QR code linking to the public profile for ${profile.kuid}`}
-              width={132}
-              height={132}
-              style={{ width: 132, height: 132, flex: "none" }}
-            />
-            <div style={{ minWidth: 180, flex: 1 }}>
-              <p className="eyebrow" style={{ marginBottom: "var(--s2)" }}>
-                Scan to verify
-              </p>
-              <p style={{ fontSize: ".92rem", color: "var(--plate-muted)", marginBottom: 0 }}>
-                Anyone can scan this with a phone camera to see your public
-                profile. It does not show your phone number or your date of
-                birth.
-              </p>
-            </div>
+      <div className="mt-8 space-y-6 print:hidden">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Button href={`/card/${k}/card.png`} size="lg" block download icon={<IconDownload size={20} aria-hidden="true" />}>{t("png")}</Button>
+          <Button href={`/card/${k}/card.pdf`} variant="secondary" size="lg" block download icon={<IconDownload size={20} aria-hidden="true" />}>{t("pdf")}</Button>
+        </div>
+        <div className="flex gap-3 rounded-card bg-surface p-4">
+          <IconPrinter className="shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-bold">{t("print")}</p>
+            <p className="text-muted">{t("printText")}</p>
           </div>
         </div>
-
-        <div className="doc__perf" />
-        <div className="mrz">
-          <small>KAFRIADA unique identifier</small>
-          {profile.kuid}
+        <div>
+          <p className="mb-2 font-bold">{t("keep")}</p>
+          <KuidStrip kuid={profile.kuid} />
+          <p className="mt-2 text-xs text-muted">{t("keepText")}</p>
         </div>
-      </article>
+        <p><a href={`/a/${k}`}>{t("profile")}</a></p>
 
-      {/* -- Actions ------------------------------------------------------- */}
-      <div className="no-print" style={{ display: "flex", gap: "var(--s3)", flexWrap: "wrap" }}>
-        {/* A plain link to the print stylesheet route would need JavaScript to
-            trigger window.print(). Instead the page IS the print layout, so the
-            browser's own print command produces the card — which works
-            everywhere, including where scripts do not run. */}
-        <a href={`/a/${encodeURIComponent(profile.kuid)}`} className="btn btn--primary">
-          View my public profile
-        </a>
-        <a href={`/qr/${encodeURIComponent(profile.kuid)}`} className="btn btn--ghost" download>
-          Download QR code
-        </a>
+        {profile.is_verified ? null : (
+          <section aria-labelledby="verify" className="rounded-card border-2 border-dashed border-line-strong p-5">
+            <h2 id="verify" className="flex items-center gap-2 text-lg uppercase"><IconShieldCheck aria-hidden="true" /> {t("verifyTitle")}</h2>
+            <p className="mt-2 text-muted">{t("verifyText")}</p>
+            <Button href="/verify" variant="secondary" className="mt-4" iconAfter={<IconArrowRight size={20} aria-hidden="true" />}>{t("verifyAction")}</Button>
+          </section>
+        )}
       </div>
-
-      <div className="notice no-print">
-        <p className="notice__title">To print</p>
-        <p style={{ marginBottom: 0 }}>
-          Use your browser&rsquo;s Print command on this page. Everything except
-          the card is left off the paper automatically.
-        </p>
-      </div>
-
-      {/* -- The upsell. Deliberately AFTER the free thing is delivered. --- */}
-      <div className="notice notice--warn no-print">
-        <p className="notice__title">Optional</p>
-        <p>
-          <strong>Add your photograph for ₦2,500.</strong> Your LGA coordinator
-          checks your ID document, and your photo then appears on your public
-          profile with a verified badge.
-        </p>
-        <p style={{ marginBottom: 0, fontSize: ".9rem", color: "var(--plate-muted)" }}>
-          No bank card? Take ₦2,500 in cash to your LGA coordinator and they can
-          do it for you. Payment opens shortly.
-        </p>
-      </div>
-
-      <div className="notice no-print">
-        <p className="notice__title">Keep this number</p>
-        <p style={{ marginBottom: 0 }}>
-          Your ID is <span className="kuid">{profile.kuid}</span>. It records
-          where you first registered, not where you live — it stays the same even
-          if you move or change clubs.
-        </p>
-      </div>
-    </div>
+    </Page>
   );
 }

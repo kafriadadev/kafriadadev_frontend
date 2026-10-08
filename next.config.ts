@@ -1,4 +1,8 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
+
+// Strings live in messages/<locale>.json; src/i18n/request.ts picks the locale.
+const withNextIntl = createNextIntlPlugin();
 
 const config: NextConfig = {
   reactStrictMode: true,
@@ -8,11 +12,20 @@ const config: NextConfig = {
   // node_modules actually reached at runtime. Harmless locally: `next start`
   // still serves the same build.
   output: "standalone",
+  // Server-side image fonts and the logo, read from disk by /og/[kuid].
+  outputFileTracingIncludes: {
+    "/og/[kuid]": ["./assets/fonts/**", "./public/brand/kafriada-net-horizontal.svg"],
+  },
 
   // Every launch screen must work with JavaScript disabled: Opera Mini in proxy
   // mode is common in northern Nigeria and runs almost none. Server Components
   // and server actions give us that for free, and this keeps us honest about it.
-  experimental: { optimizePackageImports: [] },
+  // A photograph is up to 10MB and, with JavaScript off, arrives as a plain form POST
+  // to a server action; the default limit (1MB) would refuse every phone camera.
+  experimental: {
+    optimizePackageImports: [],
+    serverActions: { bodySizeLimit: "12mb" },
+  },
 
   async headers() {
     return [
@@ -40,4 +53,4 @@ const config: NextConfig = {
   },
 };
 
-export default config;
+export default withNextIntl(config);

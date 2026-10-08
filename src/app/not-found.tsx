@@ -1,19 +1,23 @@
-import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
-/** PUB-05 for a missing record. Never alarming, always with a way forward. */
-export default function NotFound() {
+import { IconSearch } from "@/components/icons";
+import { Iso } from "@/components/iso/Iso";
+import { outOfPlay } from "@/components/iso/scenes";
+import { Button } from "@/components/ui/Button";
+import { PageState } from "@/components/ui/PageState";
+
+/** PUB-05, not found: no alarm, always a way forward. */
+export default async function NotFound() {
+  const t = await getTranslations();
   return (
-    <div className="stack">
-      <p className="eyebrow">Not found</p>
-      <h1>No athlete with that ID</h1>
-      <p className="lede">
-        Check the ID printed on the card and try again. A KAFRIADA ID looks like{" "}
-        <span className="kuid">KA-NG-JG-BKD-2026-000123</span>.
-      </p>
-      <div style={{ display: "flex", gap: "var(--s3)", flexWrap: "wrap" }}>
-        <Link href="/find" className="btn btn--primary">Look up an ID</Link>
-        <Link href="/" className="btn btn--ghost">Back to home</Link>
-      </div>
-    </div>
+    <PageState
+      wideArt
+      art={<Iso fig={outOfPlay()} name="out-of-play" />}
+      title={t("errors.notFoundTitle")}
+      action={<Button href="/find" size="lg" block icon={<IconSearch size={20} aria-hidden="true" />}>{t("nav.findId")}</Button>}
+      secondary={<a href="/">{t("errors.home")}</a>}
+    >
+      {t("errors.notFoundText")}
+    </PageState>
   );
 }

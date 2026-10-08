@@ -10,12 +10,12 @@ import { clientMeta } from "@/lib/session";
  *
  * An unknown number gets exactly the same screen as a registered one. Anything
  * else turns this form into a way of asking whether somebody is registered with
- * KAFRIADA — which the privacy notice promises it is not.
+ * KAFRIADA NET — which the privacy notice promises it is not.
  */
 export async function sendResetCodeAction(formData: FormData): Promise<void> {
   const phone = String(formData.get("phone") ?? "").trim();
   if (!phone) {
-    redirect(`/forgot?${new URLSearchParams({ error: "Enter your phone number." })}`);
+    redirect(`/forgot?${new URLSearchParams({ error: "Enter your phone number or email." })}`);
   }
 
   try {

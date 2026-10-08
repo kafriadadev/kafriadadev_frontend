@@ -11,7 +11,8 @@ import type { ClientMeta } from "./api";
  * site cannot post a form with it attached. Whether it is still good is decided
  * by the API on every request, which is what makes signing out instant.
  */
-export const SESSION_COOKIE = "kaf_session";
+export { SESSION_COOKIE } from "./session-cookie";
+import { SESSION_COOKIE } from "./session-cookie";
 
 export async function sessionToken(): Promise<string | undefined> {
   return (await cookies()).get(SESSION_COOKIE)?.value;
@@ -53,7 +54,8 @@ export async function endSession(): Promise<void> {
  */
 export const PENDING_COOKIE = "kaf_pending";
 
-export type Pending = { phone: string; kuid: string };
+export type Pending = { phone: string; kuid: string; email?: string | null };
+// `email` is the masked address the code went to, for the confirm screen's line.
 
 export async function startPending(pending: Pending): Promise<void> {
   (await cookies()).set(PENDING_COOKIE, JSON.stringify(pending), {
@@ -70,7 +72,9 @@ export async function pending(): Promise<Pending | null> {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<Pending>;
-    return parsed.phone ? { phone: parsed.phone, kuid: parsed.kuid ?? "" } : null;
+    return parsed.phone
+      ? { phone: parsed.phone, kuid: parsed.kuid ?? "", email: parsed.email ?? null }
+      : null;
   } catch {
     return null;
   }
